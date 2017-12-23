@@ -33,17 +33,21 @@
 QString ReadBase64FromFile(QString path)
 {
     QFile f(path);
-    f.open(QIODevice::ReadOnly|QIODevice::Text);
-    QByteArray b64 = f.readAll().toBase64();
+    f.open(QIODevice::ReadOnly);
+    QString ret = f.readAll().toHex();
     f.close();
-    return QString::fromStdString(b64.toStdString());
+    return ret;
 }
 
 bool WriteBase64ToFile(QString base64, QString path)
 {
     QFile f(path);
-    f.open(QIODevice::WriteOnly|QIODevice::Text);
-    f.write(QByteArray::fromStdString(base64.toStdString()));
+    f.open(QIODevice::WriteOnly);
+
+    QByteArray extract;
+    extract.append(base64);
+
+    f.write(QByteArray::fromHex(extract));
     f.close();
     return true;
 }
@@ -151,14 +155,13 @@ public:
         root.appendChild(name);
 
         QFile file1(filename);
-        if(!file1.open(QIODevice::WriteOnly|QIODevice::Text))
+        if(!file1.open(QIODevice::WriteOnly))
         {
             return false;
         }
         else
         {
-            QTextStream stream(&file1);
-            stream<<xml.toString();
+            file1.write(qCompress(xml.toByteArray()));
             file1.close();
         }
         return true;
@@ -167,11 +170,11 @@ public:
     bool ExtractArchive(QString path)
     {
         QFile f(path);
-        f.open(QIODevice::ReadOnly|QIODevice::Text);
+        f.open(QIODevice::ReadOnly);
         if(!f.isOpen()) return false;
 
         QDomDocument doc;
-        if (!doc.setContent(&f)) {
+        if (!doc.setContent(qUncompress(f.readAll()))) {
             f.close();
             return false;
         }
@@ -198,6 +201,7 @@ public:
             }
         }
 
+        return true;
     }
 
 }archiver;
@@ -469,8 +473,8 @@ int main(int argc, char *argv[])
     QTextCodec::setCodecForLocale(QTextCodec::codecForName("UTF-8"));
 
     //Подключаюсь к базе данных
-    db = QSqlDatabase::addDatabase("QODBC");
-    db.setDatabaseName("Driver={Microsoft Access Driver (*.mdb, *.accdb)};DSN='';DBQ=C:\\Projects\\SmartArchiver\\SmartArchiver.mdb");
+    db = QSqlDatabase::addDatabase(settings->value("DRIVER","QODBC").toString());
+    db.setDatabaseName(settings->value("ConnectionString","Driver={Microsoft Access Driver (*.mdb)};DSN='';DBQ=C:\\Projects\\SmartArchiver\\SmartArchiver.mdb").toString());
     if(!db.open())
     {
         QMessageBox msg;
