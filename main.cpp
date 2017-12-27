@@ -29,17 +29,27 @@
 
 #include <QCommandLineParser>
 
+//Общедоступный объект, осуществляющий подключение к базе данных
+QSqlDatabase db;
+
+//Объект настроек проекта, получающий данные из ini файлы
+QSettings* settings;
+
 //Считывает файл в base64
-QString ReadBase64FromFile(QString path)
+QString ReadBase64FromFile(QString path,QString archpath)
 {
     QFile f(path);
     f.open(QIODevice::ReadOnly);
     QString ret = f.readAll().toHex();
+
+    QSqlQuery query;
+    query.exec("INSERT INTO История([Имя файла], [Имя архива], [Имя пользователя], [Действие]) VALUES ('"+path+"','"+archpath+"','"+settings->value("AppName", "DEFAULTNAME").toString()+"',1)");
+
     f.close();
     return ret;
 }
 
-bool WriteBase64ToFile(QString base64, QString path)
+bool WriteBase64ToFile(QString base64, QString path, QString archpath)
 {
     QFile f(path);
     f.open(QIODevice::WriteOnly);
@@ -48,15 +58,14 @@ bool WriteBase64ToFile(QString base64, QString path)
     extract.append(base64);
 
     f.write(QByteArray::fromHex(extract));
+
+    QSqlQuery query;
+    query.exec("INSERT INTO История([Имя файла], [Имя архива], [Имя пользователя], [Действие]) VALUES ('"+path+"','"+archpath+"','"+settings->value("AppName", "DEFAULTNAME").toString()+"',2)");
+
+
     f.close();
     return true;
 }
-
-//Общедоступный объект, осуществляющий подключение к базе данных
-QSqlDatabase db;
-
-//Объект настроек проекта, получающий данные из ini файлы
-QSettings* settings;
 
 //Функция для разбора GET параметров у ссылки
 QMap<QString,QString> ParseUrlParameters(QString &url)
@@ -144,7 +153,7 @@ public:
             QDomElement node=xml.createElement("item");
             node.setAttribute("file","true");
             node.setAttribute("name",QFileInfo(filelist[i]).fileName());
-            node.setAttribute("base64",ReadBase64FromFile(filelist[i]));
+            node.setAttribute("base64",ReadBase64FromFile(filelist[i],filename));
             root.appendChild(node);
         }
 
@@ -197,7 +206,7 @@ public:
         {
             if(root.childNodes().at(i).attributes().contains("file"))
             {
-                WriteBase64ToFile(root.childNodes().at(i).toElement().attribute("base64","-1"),QFileInfo(path).dir().path()+"/"+name+"/"+root.childNodes().at(i).toElement().attribute("name","-1"));
+                WriteBase64ToFile(root.childNodes().at(i).toElement().attribute("base64","-1"),QFileInfo(path).dir().path()+"/"+name+"/"+root.childNodes().at(i).toElement().attribute("name","-1"),path);
             }
         }
 
