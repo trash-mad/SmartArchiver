@@ -226,7 +226,8 @@ private:
     //HTML код главной страницы
     const QString mainpage="<table width='100%' height='100%' ><tr><td align='center'>"
                            "<h2>Умный архиватор</h2>"
-                           "<a href='/files?dir=/' target='_self'>Работа с файлами</a><br><a href='/admin' target='_self'>Панель администратора</a>"
+                           "<span><small>Запущен от имени пользователя:</small> {USERNAME}</span><br><br>"
+                           "<a href='/files?dir=/' target='_self'>Запустить</a>"
                            "</td></tr></table>";
 
     const QString infopage="<h2>{TITLE}</h2><br><p>{INFO}</p><hr><a href='{BACKURL}'>Назад</a>";
@@ -266,6 +267,7 @@ public:
             case 1:
             {
                 response = mainpage;
+                response.replace("{USERNAME}",settings->value("AppName", "DEFAULTNAME").toString());
             }
             break;
 
@@ -475,6 +477,8 @@ int main(int argc, char *argv[])
     {
         qDebug() << "Инициализация файла настроек...";
         settings->setValue("AppName", "DEFAULTNAME");
+        settings->setValue("DRIVER", "QODBC");
+        settings->setValue("ConnectionString","Driver={Microsoft Access Driver (*.mdb)};DSN='';DBQ=C:\\Projects\\SmartArchiver\\SmartArchiver.mdb");
         settings->sync();
     }
 
