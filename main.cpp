@@ -67,6 +67,12 @@ bool WriteBase64ToFile(QString base64, QString path, QString archpath)
     return true;
 }
 
+struct ExtractorResponce
+{
+    bool IsOk;
+    QString ErrorString;
+};
+
 //Функция для разбора GET параметров у ссылки
 QMap<QString,QString> ParseUrlParameters(QString &url)
 {
@@ -142,6 +148,14 @@ public:
         qDebug() << "Файла не существует";
     }
 
+    bool CheckFilesExist(){
+        for(int i=0;i<filelist.count();i++){
+            QFileInfo check_file(filelist.at(i));
+            if(!check_file.exists()) return false;
+        }
+        return true;
+    }
+
     bool CreateArchive(QString filename){
         QDomDocument xml;
         QDomElement root=xml.createElement("root");
@@ -176,16 +190,25 @@ public:
         return true;
     }
 
-    bool ExtractArchive(QString path)
+    ExtractorResponce ExtractArchive(QString path)
     {
         QFile f(path);
         f.open(QIODevice::ReadOnly);
-        if(!f.isOpen()) return false;
+        if(!f.isOpen())
+        {
+            ExtractorResponce r;
+            r.IsOk=false;
+            r.ErrorString="Невозможно открыть архив с правами на чтение. Возможно, файл уже открыт в другой программе. Обратитесь к системному администратору.";
+            return r;
+        }
 
         QDomDocument doc;
         if (!doc.setContent(qUncompress(f.readAll()))) {
             f.close();
-            return false;
+            ExtractorResponce r;
+            r.IsOk=false;
+            r.ErrorString="Архив поврежден, чтение невозможно!";
+            return r;
         }
         f.close();
 
@@ -200,7 +223,13 @@ public:
             }
         }
 
-        if(QDir(QFileInfo(path).dir().path()+"/"+name).exists()) return false;
+        if(QDir(QFileInfo(path).dir().path()+"/"+name).exists())
+        {
+            ExtractorResponce r;
+            r.IsOk=false;
+            r.ErrorString="В эту директорию уже извлечен архив от этого автора. Извлеките архив в другую директорию. Псевдоним автора: "+name;
+            return r;
+        }
         QFileInfo(path).dir().mkdir(name);
         for(int i=0;i<root.childNodes().count();i++)
         {
@@ -210,7 +239,9 @@ public:
             }
         }
 
-        return true;
+        ExtractorResponce r;
+        r.IsOk=true;
+        return r;
     }
 
 }archiver;
@@ -371,8 +402,9 @@ public:
                 QString path=QUrl::fromPercentEncoding(QByteArray::fromStdString(params.value("path").toStdString()));
                 path.replace("+"," ");
                 response=infopage;
-                if(archiver.CreateArchive(path))response =  response.replace("{TITLE}","Файл создан!").replace("{INFO}","Файл успешно создан").replace("{BACKURL}","/files?dir="+QFileInfo(path).dir().path());
-                else response =  response.replace("{TITLE}","Файл не создан!").replace("{INFO}","Не удается создать архив...").replace("{BACKURL}","/files?dir=/");
+                if(archiver.CheckFilesExist()&&archiver.CreateArchive(path))response =  response.replace("{TITLE}","Архив создан!").replace("{INFO}","Файл успешно создан").replace("{BACKURL}","/files?dir="+QFileInfo(path).dir().path());
+                else if(!archiver.CheckFilesExist()) response = response.replace("{TITLE}","Архив не создан!").replace("{INFO}","Один из файлов в очереди архивации был удален до создания архива...").replace("{BACKURL}","/files?dir=/");
+                else response = response.replace("{TITLE}","Файл не создан!").replace("{INFO}","Не удается создать архив... Возможно, директория или файлы, с которыми идет работа, имеют права \"Только чтение\". Обратитесь к системному администратору!").replace("{BACKURL}","/files?dir=/");
             }
             break;
 
@@ -382,8 +414,11 @@ public:
                 QString path=QUrl::fromPercentEncoding(QByteArray::fromStdString(params.value("path").toStdString()));
                 path.replace("+"," ");
                 response=infopage;
-                if(archiver.ExtractArchive(path))response =  response.replace("{TITLE}","Архив извлечен!").replace("{INFO}","Файлы успешно созданы").replace("{BACKURL}","/files?dir="+QFileInfo(path).dir().path());
-                else response =  response.replace("{TITLE}","Не удается извлеч архив!").replace("{INFO}","Не удается извлечь данные из архива...").replace("{BACKURL}","/files?dir=/");
+
+                ExtractorResponce r = archiver.ExtractArchive(path);
+
+                if(r.IsOk)response =  response.replace("{TITLE}","Архив извлечен!").replace("{INFO}","Файлы успешно созданы").replace("{BACKURL}","/files?dir="+QFileInfo(path).dir().path());
+                else response =  response.replace("{TITLE}","Не удается извлеч архив!").replace("{INFO}",r.ErrorString).replace("{BACKURL}","/files?dir=/");
             }
             break;
 
